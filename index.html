@@ -537,9 +537,9 @@ function renderEmptyState() {
   el.flashcard.innerHTML =
     '<div class="empty-state">' +
       (selected.hsk1 || selected.hsk2
-        ? "🎉 No more words in this round!"
-        : "Select HSK1 and/or HSK2 above to start.") +
-      (selected.hsk1 || selected.hsk2 ? '<br><button class="restart-btn" id="restart-btn">Restart round</button>' : '') +
+        ? "🎉 !No hay más palabras en esta ronda!"
+        : "Elige al menos un nivel de HSK para empezar") +
+      (selected.hsk1 || selected.hsk2 ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
     '</div>';
   setActionButtonsEnabled(false);
   updateProgress();
@@ -552,7 +552,7 @@ function renderCardFront() {
   el.flashcard.classList.remove('revealed');
   el.flashcard.innerHTML =
     '<div class="hanzi">' + current.hanzi + '</div>' +
-    '<div class="hint">Tap to reveal</div>';
+    '<div class="hint">Toca para resolver</div>';
   setActionButtonsEnabled(false);
 }
 
