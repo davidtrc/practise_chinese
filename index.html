@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chinese Flashcards</title>
+<style>
+  :root{
+    --bg: #0f1115;
+    --card-bg: #1b1e26;
+    --card-bg-active: #23283a;
+    --accent: #4f8cff;
+    --accent-off: #2a2f3d;
+    --text: #f2f3f5;
+    --text-dim: #9aa0ab;
+    --green: #34c471;
+    --red: #e5534b;
+    --grey: #3a3d45;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom) 16px;
+  }
+
+  /* --- Top toggle bar --- */
+  .set-toggles {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding: 16px 0 8px 0;
+  }
+  .toggle-btn {
+    flex: 1;
+    max-width: 160px;
+    padding: 12px 0;
+    border-radius: 12px;
+    border: 2px solid var(--accent-off);
+    background: var(--accent-off);
+    color: var(--text-dim);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.15s ease;
+  }
+  .toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .progress {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 4px 0 0 0;
+    min-height: 18px;
+  }
+
+  /* --- Flashcard --- */
+  .card-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0;
+  }
+  .flashcard {
+    width: 100%;
+    max-width: 420px;
+    min-height: 260px;
+    background: var(--card-bg);
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    transition: background 0.15s ease;
+  }
+  .flashcard.revealed {
+    background: var(--card-bg-active);
+  }
+  .hanzi {
+    font-size: 88px;
+    font-weight: 600;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+  .hint {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  .pinyin {
+    font-size: 26px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-top: 6px;
+  }
+  .translation {
+    font-size: 20px;
+    color: var(--text);
+    margin-top: 6px;
+  }
+
+  /* --- Bottom action buttons --- */
+  .actions {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0 20px 0;
+  }
+  .action-btn {
+    flex: 1;
+    padding: 18px 0;
+    border-radius: 16px;
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+  .action-btn:active {
+    transform: scale(0.97);
+  }
+  .forgot-btn { background: var(--red); }
+  .remember-btn { background: var(--green); }
+  .action-btn.disabled {
+    background: var(--grey);
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 16px;
+    padding: 20px;
+  }
+  .restart-btn {
+    margin-top: 16px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="set-toggles">
+    <button id="btn-hsk1" class="toggle-btn active">HSK1</button>
+    <button id="btn-hsk2" class="toggle-btn active">HSK2</button>
+  </div>
+  <div class="progress" id="progress"></div>
+
+  <div class="card-area">
+    <div class="flashcard" id="flashcard">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="forgot-btn" class="action-btn forgot-btn disabled">I didn't remember it</button>
+    <button id="remember-btn" class="action-btn remember-btn disabled">I remember it</button>
+  </div>
+
+</div>
+
+<script>
+// =========================================================================
+// WORD DATA
+// Add more words by pushing { hanzi, pinyin, en } objects into these arrays.
+// =========================================================================
+const HSK1 = [
+  {hanzi:"爱", pinyin:"ài", en:"to love"},
+  {hanzi:"八", pinyin:"bā", en:"eight"},
+  {hanzi:"爸爸", pinyin:"bàba", en:"dad"},
+  {hanzi:"杯子", pinyin:"bēizi", en:"cup"},
+  {hanzi:"北京", pinyin:"Běijīng", en:"Beijing"},
+  {hanzi:"本", pinyin:"běn", en:"measure word for books"},
+  {hanzi:"不客气", pinyin:"bú kèqi", en:"you're welcome"},
+  {hanzi:"不", pinyin:"bù", en:"no / not"},
+  {hanzi:"菜", pinyin:"cài", en:"dish / vegetable"},
+  {hanzi:"茶", pinyin:"chá", en:"tea"},
+  {hanzi:"吃", pinyin:"chī", en:"to eat"},
+  {hanzi:"出租车", pinyin:"chūzūchē", en:"taxi"},
+  {hanzi:"打电话", pinyin:"dǎ diànhuà", en:"to make a phone call"},
+  {hanzi:"大", pinyin:"dà", en:"big"},
+  {hanzi:"的", pinyin:"de", en:"possessive/modifying particle"},
+  {hanzi:"点", pinyin:"diǎn", en:"o'clock / point"},
+  {hanzi:"电脑", pinyin:"diànnǎo", en:"computer"},
+  {hanzi:"电视", pinyin:"diànshì", en:"television"},
+  {hanzi:"电影", pinyin:"diànyǐng", en:"movie"},
+  {hanzi:"东西", pinyin:"dōngxi", en:"thing / object"},
+  {hanzi:"都", pinyin:"dōu", en:"all / both"},
+  {hanzi:"读", pinyin:"dú", en:"to read"},
+  {hanzi:"对不起", pinyin:"duìbuqǐ", en:"sorry"},
+  {hanzi:"多", pinyin:"duō", en:"many / much"},
+  {hanzi:"多少", pinyin:"duōshao", en:"how many/much"},
+  {hanzi:"儿子", pinyin:"érzi", en:"son"},
+  {hanzi:"二", pinyin:"èr", en:"two"},
+  {hanzi:"饭店", pinyin:"fàndiàn", en:"restaurant / hotel"},
+  {hanzi:"飞机", pinyin:"fēijī", en:"airplane"},
+  {hanzi:"分钟", pinyin:"fēnzhōng", en:"minute"},
+  {hanzi:"高兴", pinyin:"gāoxìng", en:"happy"},
+  {hanzi:"个", pinyin:"gè", en:"generic measure word"},
+  {hanzi:"工作", pinyin:"gōngzuò", en:"to work / job"},
+  {hanzi:"狗", pinyin:"gǒu", en:"dog"},
+  {hanzi:"汉语", pinyin:"Hànyǔ", en:"Chinese language"},
+  {hanzi:"好", pinyin:"hǎo", en:"good"},
+  {hanzi:"号", pinyin:"hào", en:"number / date"},
+  {hanzi:"喝", pinyin:"hē", en:"to drink"},
+  {hanzi:"和", pinyin:"hé", en:"and"},
+  {hanzi:"很", pinyin:"hěn", en:"very"},
+  {hanzi:"后面", pinyin:"hòumiàn", en:"behind"},
+  {hanzi:"回", pinyin:"huí", en:"to return"},
+  {hanzi:"会", pinyin:"huì", en:"can / to be able to"},
+  {hanzi:"几", pinyin:"jǐ", en:"how many (small numbers)"},
+  {hanzi:"家", pinyin:"jiā", en:"home / family"},
+  {hanzi:"叫", pinyin:"jiào", en:"to be called"},
+  {hanzi:"今天", pinyin:"jīntiān", en:"today"},
+  {hanzi:"九", pinyin:"jiǔ", en:"nine"},
+  {hanzi:"开", pinyin:"kāi", en:"to open / to drive"},
+  {hanzi:"看", pinyin:"kàn", en:"to look / to watch"},
+  {hanzi:"看见", pinyin:"kànjiàn", en:"to see"},
+  {hanzi:"块", pinyin:"kuài", en:"measure word for money"},
+  {hanzi:"来", pinyin:"lái", en:"to come"},
+  {hanzi:"老师", pinyin:"lǎoshī", en:"teacher"},
+  {hanzi:"了", pinyin:"le", en:"completed action particle"},
+  {hanzi:"冷", pinyin:"lěng", en:"cold"},
+  {hanzi:"里", pinyin:"lǐ", en:"inside"},
+  {hanzi:"六", pinyin:"liù", en:"six"},
+  {hanzi:"妈妈", pinyin:"māma", en:"mom"},
+  {hanzi:"吗", pinyin:"ma", en:"question particle"},
+  {hanzi:"买", pinyin:"mǎi", en:"to buy"},
+  {hanzi:"猫", pinyin:"māo", en:"cat"},
+  {hanzi:"没关系", pinyin:"méi guānxi", en:"it doesn't matter"},
+  {hanzi:"没有", pinyin:"méiyǒu", en:"to not have"},
+  {hanzi:"米饭", pinyin:"mǐfàn", en:"rice"},
+  {hanzi:"明天", pinyin:"míngtiān", en:"tomorrow"},
+  {hanzi:"名字", pinyin:"míngzi", en:"name"},
+  {hanzi:"哪", pinyin:"nǎ", en:"which"},
+  {hanzi:"那", pinyin:"nà", en:"that"},
+  {hanzi:"呢", pinyin:"ne", en:"question particle"},
+  {hanzi:"能", pinyin:"néng", en:"to be able to"},
+  {hanzi:"你", pinyin:"nǐ", en:"you"},
+  {hanzi:"年", pinyin:"nián", en:"year"},
+  {hanzi:"女儿", pinyin:"nǚ'ér", en:"daughter"},
+  {hanzi:"朋友", pinyin:"péngyou", en:"friend"},
+  {hanzi:"漂亮", pinyin:"piàoliang", en:"pretty"},
+  {hanzi:"苹果", pinyin:"píngguǒ", en:"apple"},
+  {hanzi:"七", pinyin:"qī", en:"seven"},
+  {hanzi:"钱", pinyin:"qián", en:"money"},
+  {hanzi:"前面", pinyin:"qiánmiàn", en:"in front"},
+  {hanzi:"请", pinyin:"qǐng", en:"please"},
+  {hanzi:"去", pinyin:"qù", en:"to go"},
+  {hanzi:"热", pinyin:"rè", en:"hot"},
+  {hanzi:"人", pinyin:"rén", en:"person"},
+  {hanzi:"认识", pinyin:"rènshi", en:"to know / recognize"},
+  {hanzi:"三", pinyin:"sān", en:"three"},
+  {hanzi:"商店", pinyin:"shāngdiàn", en:"shop"},
+  {hanzi:"上", pinyin:"shàng", en:"above / on"},
+  {hanzi:"上午", pinyin:"shàngwǔ", en:"morning"},
+  {hanzi:"少", pinyin:"shǎo", en:"few / less"},
+  {hanzi:"谁", pinyin:"shéi", en:"who"},
+  {hanzi:"什么", pinyin:"shénme", en:"what"},
+  {hanzi:"十", pinyin:"shí", en:"ten"},
+  {hanzi:"时候", pinyin:"shíhou", en:"time / moment"},
+  {hanzi:"是", pinyin:"shì", en:"to be"},
+  {hanzi:"书", pinyin:"shū", en:"book"},
+  {hanzi:"水", pinyin:"shuǐ", en:"water"},
+  {hanzi:"水果", pinyin:"shuǐguǒ", en:"fruit"},
+  {hanzi:"睡觉", pinyin:"shuìjiào", en:"to sleep"},
+  {hanzi:"说", pinyin:"shuō", en:"to speak"},
+  {hanzi:"四", pinyin:"sì", en:"four"},
+  {hanzi:"岁", pinyin:"suì", en:"years old"},
+  {hanzi:"他", pinyin:"tā", en:"he"},
+  {hanzi:"她", pinyin:"tā", en:"she"},
+  {hanzi:"太", pinyin:"tài", en:"too / extremely"},
+  {hanzi:"天气", pinyin:"tiānqì", en:"weather"},
+  {hanzi:"听", pinyin:"tīng", en:"to listen"},
+  {hanzi:"同学", pinyin:"tóngxué", en:"classmate"},
+  {hanzi:"喂", pinyin:"wèi", en:"hello (on phone)"},
+  {hanzi:"我", pinyin:"wǒ", en:"I / me"},
+  {hanzi:"我们", pinyin:"wǒmen", en:"we"},
+  {hanzi:"五", pinyin:"wǔ", en:"five"},
+  {hanzi:"喜欢", pinyin:"xǐhuan", en:"to like"},
+  {hanzi:"下", pinyin:"xià", en:"below / down"},
+  {hanzi:"下午", pinyin:"xiàwǔ", en:"afternoon"},
+  {hanzi:"下雨", pinyin:"xiàyǔ", en:"to rain"},
+  {hanzi:"先生", pinyin:"xiānsheng", en:"mister / sir"},
+  {hanzi:"现在", pinyin:"xiànzài", en:"now"},
+  {hanzi:"想", pinyin:"xiǎng", en:"to want / to think"},
+  {hanzi:"小", pinyin:"xiǎo", en:"small"},
+  {hanzi:"小姐", pinyin:"xiǎojiě", en:"miss"},
+  {hanzi:"些", pinyin:"xiē", en:"some"},
+  {hanzi:"谢谢", pinyin:"xièxie", en:"thank you"},
+  {hanzi:"星期", pinyin:"xīngqī", en:"week"},
+  {hanzi:"学生", pinyin:"xuésheng", en:"student"},
+  {hanzi:"学习", pinyin:"xuéxí", en:"to study"},
+  {hanzi:"学校", pinyin:"xuéxiào", en:"school"},
+  {hanzi:"一", pinyin:"yī", en:"one"},
+  {hanzi:"衣服", pinyin:"yīfu", en:"clothes"},
+  {hanzi:"医生", pinyin:"yīshēng", en:"doctor"},
+  {hanzi:"医院", pinyin:"yīyuàn", en:"hospital"},
+  {hanzi:"椅子", pinyin:"yǐzi", en:"chair"},
+  {hanzi:"有", pinyin:"yǒu", en:"to have"},
+  {hanzi:"月", pinyin:"yuè", en:"month"},
+  {hanzi:"在", pinyin:"zài", en:"at / in"},
+  {hanzi:"再见", pinyin:"zàijiàn", en:"goodbye"},
+  {hanzi:"怎么", pinyin:"zěnme", en:"how"},
+  {hanzi:"怎么样", pinyin:"zěnmeyàng", en:"how about"},
+  {hanzi:"这", pinyin:"zhè", en:"this"},
+  {hanzi:"中国", pinyin:"Zhōngguó", en:"China"},
+  {hanzi:"中午", pinyin:"zhōngwǔ", en:"noon"},
+  {hanzi:"住", pinyin:"zhù", en:"to live / reside"},
+  {hanzi:"字", pinyin:"zì", en:"character"},
+  {hanzi:"昨天", pinyin:"zuótiān", en:"yesterday"},
+  {hanzi:"做", pinyin:"zuò", en:"to do"},
+  {hanzi:"坐", pinyin:"zuò", en:"to sit"},
+];
+
+const HSK2 = [
+  {hanzi:"吧", pinyin:"ba", en:"suggestion particle"},
+  {hanzi:"白", pinyin:"bái", en:"white"},
+  {hanzi:"百", pinyin:"bǎi", en:"hundred"},
+  {hanzi:"帮助", pinyin:"bāngzhù", en:"to help"},
+  {hanzi:"报纸", pinyin:"bàozhǐ", en:"newspaper"},
+  {hanzi:"比", pinyin:"bǐ", en:"to compare"},
+  {hanzi:"别", pinyin:"bié", en:"don't"},
+  {hanzi:"宾馆", pinyin:"bīnguǎn", en:"hotel"},
+  {hanzi:"长", pinyin:"cháng", en:"long"},
+  {hanzi:"唱歌", pinyin:"chànggē", en:"to sing"},
+  {hanzi:"出", pinyin:"chū", en:"to go out"},
+  {hanzi:"穿", pinyin:"chuān", en:"to wear"},
+  {hanzi:"次", pinyin:"cì", en:"time / occurrence"},
+  {hanzi:"从", pinyin:"cóng", en:"from"},
+  {hanzi:"错", pinyin:"cuò", en:"wrong"},
+  {hanzi:"打篮球", pinyin:"dǎ lánqiú", en:"to play basketball"},
+  {hanzi:"大家", pinyin:"dàjiā", en:"everyone"},
+  {hanzi:"到", pinyin:"dào", en:"to arrive"},
+  {hanzi:"得", pinyin:"děi", en:"must / to have to"},
+  {hanzi:"等", pinyin:"děng", en:"to wait"},
+  {hanzi:"弟弟", pinyin:"dìdi", en:"younger brother"},
+  {hanzi:"第一", pinyin:"dì-yī", en:"first"},
+  {hanzi:"懂", pinyin:"dǒng", en:"to understand"},
+  {hanzi:"对", pinyin:"duì", en:"correct / towards"},
+  {hanzi:"房间", pinyin:"fángjiān", en:"room"},
+  {hanzi:"非常", pinyin:"fēicháng", en:"extremely"},
+  {hanzi:"服务员", pinyin:"fúwùyuán", en:"waiter/attendant"},
+  {hanzi:"高", pinyin:"gāo", en:"tall / high"},
+  {hanzi:"告诉", pinyin:"gàosu", en:"to tell"},
+  {hanzi:"哥哥", pinyin:"gēge", en:"older brother"},
+  {hanzi:"给", pinyin:"gěi", en:"to give"},
+  {hanzi:"公共汽车", pinyin:"gōnggòngqìchē", en:"bus"},
+  {hanzi:"公司", pinyin:"gōngsī", en:"company"},
+  {hanzi:"贵", pinyin:"guì", en:"expensive"},
+  {hanzi:"过", pinyin:"guò", en:"to pass / experience marker"},
+  {hanzi:"还", pinyin:"hái", en:"still / also"},
+  {hanzi:"孩子", pinyin:"háizi", en:"child"},
+  {hanzi:"好吃", pinyin:"hǎochī", en:"tasty"},
+  {hanzi:"黑", pinyin:"hēi", en:"black"},
+  {hanzi:"红", pinyin:"hóng", en:"red"},
+  {hanzi:"火车站", pinyin:"huǒchēzhàn", en:"train station"},
+  {hanzi:"机场", pinyin:"jīchǎng", en:"airport"},
+  {hanzi:"件", pinyin:"jiàn", en:"measure word for items"},
+  {hanzi:"教室", pinyin:"jiàoshì", en:"classroom"},
+  {hanzi:"姐姐", pinyin:"jiějie", en:"older sister"},
+  {hanzi:"介绍", pinyin:"jièshào", en:"to introduce"},
+  {hanzi:"进", pinyin:"jìn", en:"to enter"},
+  {hanzi:"近", pinyin:"jìn", en:"near"},
+  {hanzi:"就", pinyin:"jiù", en:"just / then"},
+  {hanzi:"觉得", pinyin:"juéde", en:"to feel / think"},
+  {hanzi:"咖啡", pinyin:"kāfēi", en:"coffee"},
+  {hanzi:"开始", pinyin:"kāishǐ", en:"to begin"},
+  {hanzi:"考试", pinyin:"kǎoshì", en:"exam"},
+  {hanzi:"可能", pinyin:"kěnéng", en:"maybe / possible"},
+  {hanzi:"可以", pinyin:"kěyǐ", en:"can / may"},
+  {hanzi:"课", pinyin:"kè", en:"class / lesson"},
+  {hanzi:"快", pinyin:"kuài", en:"fast"},
+  {hanzi:"快乐", pinyin:"kuàilè", en:"happy"},
+  {hanzi:"累", pinyin:"lèi", en:"tired"},
+  {hanzi:"离", pinyin:"lí", en:"away from"},
+  {hanzi:"两", pinyin:"liǎng", en:"two (of something)"},
+  {hanzi:"路", pinyin:"lù", en:"road"},
+  {hanzi:"旅游", pinyin:"lǚyóu", en:"to travel"},
+  {hanzi:"卖", pinyin:"mài", en:"to sell"},
+  {hanzi:"慢", pinyin:"màn", en:"slow"},
+  {hanzi:"忙", pinyin:"máng", en:"busy"},
+  {hanzi:"每", pinyin:"měi", en:"every"},
+  {hanzi:"妹妹", pinyin:"mèimei", en:"younger sister"},
+  {hanzi:"门", pinyin:"mén", en:"door"},
+  {hanzi:"面条", pinyin:"miàntiáo", en:"noodles"},
+  {hanzi:"男", pinyin:"nán", en:"male"},
+  {hanzi:"难", pinyin:"nán", en:"difficult"},
+  {hanzi:"你们", pinyin:"nǐmen", en:"you (plural)"},
+  {hanzi:"牛奶", pinyin:"niúnǎi", en:"milk"},
+  {hanzi:"努力", pinyin:"nǔlì", en:"to work hard"},
+  {hanzi:"female", pinyin:"nǚ", en:"female"},
+  {hanzi:"旁边", pinyin:"pángbiān", en:"next to"},
+  {hanzi:"跑步", pinyin:"pǎobù", en:"to run"},
+  {hanzi:"便宜", pinyin:"piányi", en:"cheap"},
+  {hanzi:"票", pinyin:"piào", en:"ticket"},
+  {hanzi:"妻子", pinyin:"qīzi", en:"wife"},
+  {hanzi:"起床", pinyin:"qǐchuáng", en:"to get up"},
+  {hanzi:"千", pinyin:"qiān", en:"thousand"},
+  {hanzi:"晴", pinyin:"qíng", en:"sunny/clear"},
+  {hanzi:"其他", pinyin:"qítā", en:"other"},
+  {hanzi:"让", pinyin:"ràng", en:"to let / to make (someone)"},
+  {hanzi:"日", pinyin:"rì", en:"day / sun"},
+  {hanzi:"上班", pinyin:"shàngbān", en:"to go to work"},
+  {hanzi:"身体", pinyin:"shēntǐ", en:"body / health"},
+  {hanzi:"生病", pinyin:"shēngbìng", en:"to get sick"},
+  {hanzi:"生日", pinyin:"shēngrì", en:"birthday"},
+  {hanzi:"时间", pinyin:"shíjiān", en:"time"},
+  {hanzi:"事情", pinyin:"shìqing", en:"matter / affair"},
+  {hanzi:"手表", pinyin:"shǒubiǎo", en:"wristwatch"},
+  {hanzi:"手机", pinyin:"shǒujī", en:"mobile phone"},
+  {hanzi:"送", pinyin:"sòng", en:"to give / deliver"},
+  {hanzi:"虽然", pinyin:"suīrán", en:"although"},
+  {hanzi:"所以", pinyin:"suǒyǐ", en:"therefore"},
+  {hanzi:"他们", pinyin:"tāmen", en:"they"},
+  {hanzi:"体育", pinyin:"tǐyù", en:"sports/PE"},
+  {hanzi:"跳舞", pinyin:"tiàowǔ", en:"to dance"},
+  {hanzi:"外", pinyin:"wài", en:"outside"},
+  {hanzi:"完", pinyin:"wán", en:"to finish"},
+  {hanzi:"玩", pinyin:"wán", en:"to play"},
+  {hanzi:"晚上", pinyin:"wǎnshang", en:"evening"},
+  {hanzi:"为什么", pinyin:"wèishénme", en:"why"},
+  {hanzi:"问", pinyin:"wèn", en:"to ask"},
+  {hanzi:"问题", pinyin:"wèntí", en:"question / problem"},
+  {hanzi:"西瓜", pinyin:"xīguā", en:"watermelon"},
+  {hanzi:"希望", pinyin:"xīwàng", en:"to hope"},
+  {hanzi:"洗", pinyin:"xǐ", en:"to wash"},
+  {hanzi:"小时", pinyin:"xiǎoshí", en:"hour"},
+  {hanzi:"笑", pinyin:"xiào", en:"to laugh / smile"},
+  {hanzi:"新", pinyin:"xīn", en:"new"},
+  {hanzi:"姓", pinyin:"xìng", en:"surname"},
+  {hanzi:"休息", pinyin:"xiūxi", en:"to rest"},
+  {hanzi:"雪", pinyin:"xuě", en:"snow"},
+  {hanzi:"颜色", pinyin:"yánsè", en:"color"},
+  {hanzi:"眼睛", pinyin:"yǎnjing", en:"eye"},
+  {hanzi:"羊肉", pinyin:"yángròu", en:"mutton"},
+  {hanzi:"药", pinyin:"yào", en:"medicine"},
+  {hanzi:"要", pinyin:"yào", en:"to want / need"},
+  {hanzi:"也", pinyin:"yě", en:"also"},
+  {hanzi:"一起", pinyin:"yìqǐ", en:"together"},
+  {hanzi:"一样", pinyin:"yíyàng", en:"the same"},
+  {hanzi:"已经", pinyin:"yǐjīng", en:"already"},
+  {hanzi:"因为", pinyin:"yīnwèi", en:"because"},
+  {hanzi:"游泳", pinyin:"yóuyǒng", en:"to swim"},
+  {hanzi:"右边", pinyin:"yòubian", en:"right side"},
+  {hanzi:"鱼", pinyin:"yú", en:"fish"},
+  {hanzi:"远", pinyin:"yuǎn", en:"far"},
+  {hanzi:"运动", pinyin:"yùndòng", en:"to exercise"},
+  {hanzi:"再", pinyin:"zài", en:"again"},
+  {hanzi:"早上", pinyin:"zǎoshang", en:"early morning"},
+  {hanzi:"丈夫", pinyin:"zhàngfu", en:"husband"},
+  {hanzi:"找", pinyin:"zhǎo", en:"to look for"},
+  {hanzi:"着", pinyin:"zhe", en:"ongoing action particle"},
+  {hanzi:"真", pinyin:"zhēn", en:"real / really"},
+  {hanzi:"知道", pinyin:"zhīdào", en:"to know"},
+  {hanzi:"准备", pinyin:"zhǔnbèi", en:"to prepare"},
+  {hanzi:"走", pinyin:"zǒu", en:"to walk / to leave"},
+  {hanzi:"左边", pinyin:"zuǒbian", en:"left side"},
+  {hanzi:"最", pinyin:"zuì", en:"most"},
+  {hanzi:"最后", pinyin:"zuìhòu", en:"finally / last"},
+  {hanzi:"最近", pinyin:"zuìjìn", en:"recently"},
+];
+
+// =========================================================================
+// STATE
+// =========================================================================
+let selected = { hsk1: true, hsk2: true };
+let queue = [];
+let current = null;
+let revealed = false;
+
+const el = {
+  btnHsk1: document.getElementById('btn-hsk1'),
+  btnHsk2: document.getElementById('btn-hsk2'),
+  progress: document.getElementById('progress'),
+  flashcard: document.getElementById('flashcard'),
+  forgotBtn: document.getElementById('forgot-btn'),
+  rememberBtn: document.getElementById('remember-btn'),
+};
+
+function buildQueue() {
+  let words = [];
+  if (selected.hsk1) words = words.concat(HSK1.map(w => ({...w, set: 'HSK1'})));
+  if (selected.hsk2) words = words.concat(HSK2.map(w => ({...w, set: 'HSK2'})));
+  // Fisher-Yates shuffle
+  for (let i = words.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [words[i], words[j]] = [words[j], words[i]];
+  }
+  queue = words;
+}
+
+function updateToggleUI() {
+  el.btnHsk1.classList.toggle('active', selected.hsk1);
+  el.btnHsk2.classList.toggle('active', selected.hsk2);
+}
+
+function updateProgress() {
+  if (queue.length === 0 && !current) {
+    el.progress.textContent = '';
+    return;
+  }
+  const remaining = queue.length + (current ? 1 : 0);
+  el.progress.textContent = remaining + ' word' + (remaining === 1 ? '' : 's') + ' remaining';
+}
+
+function setActionButtonsEnabled(enabled) {
+  el.forgotBtn.classList.toggle('disabled', !enabled);
+  el.rememberBtn.classList.toggle('disabled', !enabled);
+}
+
+function renderEmptyState() {
+  el.flashcard.classList.remove('revealed');
+  el.flashcard.innerHTML =
+    '<div class="empty-state">' +
+      (selected.hsk1 || selected.hsk2
+        ? "🎉 No more words in this round!"
+        : "Select HSK1 and/or HSK2 above to start.") +
+      (selected.hsk1 || selected.hsk2 ? '<br><button class="restart-btn" id="restart-btn">Restart round</button>' : '') +
+    '</div>';
+  setActionButtonsEnabled(false);
+  updateProgress();
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) restartBtn.addEventListener('click', startRound);
+}
+
+function renderCardFront() {
+  revealed = false;
+  el.flashcard.classList.remove('revealed');
+  el.flashcard.innerHTML =
+    '<div class="hanzi">' + current.hanzi + '</div>' +
+    '<div class="hint">Tap to reveal</div>';
+  setActionButtonsEnabled(false);
+}
+
+function renderCardBack() {
+  revealed = true;
+  el.flashcard.classList.add('revealed');
+  el.flashcard.innerHTML =
+    '<div class="hanzi">' + current.hanzi + '</div>' +
+    '<div class="pinyin">' + current.pinyin + '</div>' +
+    '<div class="translation">' + current.en + '</div>';
+  setActionButtonsEnabled(true);
+}
+
+function nextCard() {
+  if (queue.length === 0) {
+    current = null;
+    renderEmptyState();
+    return;
+  }
+  current = queue.shift();
+  renderCardFront();
+  updateProgress();
+}
+
+function startRound() {
+  buildQueue();
+  nextCard();
+}
+
+// --- Event listeners ---
+el.flashcard.addEventListener('click', () => {
+  if (!current) return;
+  if (!revealed) {
+    renderCardBack();
+  }
+});
+
+el.forgotBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!revealed) return;
+  // TODO: define "didn't remember" behavior later
+  nextCard();
+});
+
+el.rememberBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!revealed) return;
+  // TODO: define "remember" behavior later
+  nextCard();
+});
+
+el.btnHsk1.addEventListener('click', () => {
+  selected.hsk1 = !selected.hsk1;
+  updateToggleUI();
+  startRound();
+});
+
+el.btnHsk2.addEventListener('click', () => {
+  selected.hsk2 = !selected.hsk2;
+  updateToggleUI();
+  startRound();
+});
+
+// --- Init ---
+updateToggleUI();
+startRound();
+</script>
+</body>
+</html>
