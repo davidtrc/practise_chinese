@@ -19,37 +19,43 @@
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; padding: 0; height: 100%;
+    margin: 0; padding: 0;
+    height: 100%;
     background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overscroll-behavior: none;
     user-select: none;
+    overflow: hidden;
   }
   #app {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh; /* actual visible height on mobile Safari, overrides above */
     padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom) 16px;
   }
 
   /* --- Top toggle bar --- */
   .set-toggles {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
     justify-content: center;
-    padding: 16px 0 8px 0;
+    padding: 10px 0 6px 0;
+    flex-shrink: 0;
   }
   .toggle-btn {
     flex: 1;
-    max-width: 160px;
-    padding: 12px 0;
+    min-width: 42%;
+    max-width: 200px;
+    padding: 10px 4px;
     border-radius: 12px;
     border: 2px solid var(--accent-off);
     background: var(--accent-off);
     color: var(--text-dim);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     transition: all 0.15s ease;
   }
   .toggle-btn.active {
@@ -64,27 +70,30 @@
     font-size: 13px;
     padding: 4px 0 0 0;
     min-height: 18px;
+    flex-shrink: 0;
   }
 
   /* --- Flashcard --- */
   .card-area {
     flex: 1;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px 0;
+    padding: 10px 0;
   }
   .flashcard {
     width: 100%;
+    height: 100%;
     max-width: 420px;
-    min-height: 260px;
+    max-height: 340px;
     background: var(--card-bg);
     border-radius: 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 20px;
     text-align: center;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     transition: background 0.15s ease;
@@ -93,37 +102,46 @@
     background: var(--card-bg-active);
   }
   .hanzi {
-    font-size: 88px;
+    font-size: clamp(56px, 16vh, 88px);
     font-weight: 600;
     line-height: 1.1;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .hint {
     color: var(--text-dim);
     font-size: 14px;
-    margin-top: 8px;
+    margin-top: 6px;
   }
   .pinyin {
-    font-size: 26px;
+    font-size: 24px;
     color: var(--accent);
     font-weight: 600;
-    margin-top: 6px;
+    margin-top: 4px;
   }
   .translation {
-    font-size: 20px;
+    font-size: 19px;
     color: var(--text);
-    margin-top: 6px;
+    margin-top: 4px;
+  }
+  .badge {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.06);
+    padding: 3px 10px;
+    border-radius: 20px;
   }
 
   /* --- Bottom action buttons --- */
   .actions {
     display: flex;
     gap: 12px;
-    padding: 8px 0 20px 0;
+    padding: 8px 0 8px 0;
+    flex-shrink: 0;
   }
   .action-btn {
     flex: 1;
-    padding: 18px 0;
+    padding: 16px 0;
     border-radius: 16px;
     border: none;
     font-size: 16px;
@@ -414,7 +432,7 @@ const HSK2 = [
   {hanzi:"你们", pinyin:"nǐmen", en:"you (plural)"},
   {hanzi:"牛奶", pinyin:"niúnǎi", en:"milk"},
   {hanzi:"努力", pinyin:"nǔlì", en:"to work hard"},
-  {hanzi:"female", pinyin:"nǚ", en:"female"},
+  {hanzi:"女", pinyin:"nǚ", en:"female"},
   {hanzi:"旁边", pinyin:"pángbiān", en:"next to"},
   {hanzi:"跑步", pinyin:"pǎobù", en:"to run"},
   {hanzi:"便宜", pinyin:"piányi", en:"cheap"},
@@ -486,13 +504,52 @@ const HSK2 = [
   {hanzi:"最近", pinyin:"zuìjìn", en:"recently"},
 ];
 
+// Your own personal word list. Add words you're learning outside HSK1/HSK2 here.
 const DavidDictionary = [
   {hanzi:"吧", pinyin:"ba", en:"suggestion particle"},
 ];
 
-const Forgotten = [
-  {hanzi:"左边", pinyin:"zuǒbian", en:"left side"},
-];
+// =========================================================================
+// PERSISTENT "FORGOTTEN WORDS" LIST
+// Stored in localStorage, per browser. Survives refresh. No static array
+// anymore — this is read/written dynamically as you tap the two buttons.
+// =========================================================================
+const FORGOTTEN_KEY = 'chineseFlashcards.forgottenWords';
+
+function loadForgotten() {
+  try {
+    const raw = localStorage.getItem(FORGOTTEN_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('Could not read forgotten list', e);
+    return [];
+  }
+}
+
+function saveForgotten(list) {
+  try {
+    localStorage.setItem(FORGOTTEN_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Could not save forgotten list', e);
+  }
+}
+
+function isInForgotten(hanzi) {
+  return loadForgotten().some(w => w.hanzi === hanzi);
+}
+
+function addToForgotten(word) {
+  const list = loadForgotten();
+  if (!list.some(w => w.hanzi === word.hanzi)) {
+    list.push({ hanzi: word.hanzi, pinyin: word.pinyin, en: word.en });
+    saveForgotten(list);
+  }
+}
+
+function removeFromForgotten(hanzi) {
+  const list = loadForgotten().filter(w => w.hanzi !== hanzi);
+  saveForgotten(list);
+}
 
 // =========================================================================
 // STATE
@@ -518,7 +575,7 @@ function buildQueue() {
   if (selected.hsk1) words = words.concat(HSK1.map(w => ({...w, set: 'HSK1'})));
   if (selected.hsk2) words = words.concat(HSK2.map(w => ({...w, set: 'HSK2'})));
   if (selected.dict) words = words.concat(DavidDictionary.map(w => ({...w, set: 'DavidDictionary'})));
-  if (selected.forgotten) words = words.concat(Forgotten.map(w => ({...w, set: 'Forgotten'})));
+  if (selected.forgotten) words = words.concat(loadForgotten().map(w => ({...w, set: 'Forgotten'})));
   // Fisher-Yates shuffle
   for (let i = words.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -548,14 +605,18 @@ function setActionButtonsEnabled(enabled) {
   el.rememberBtn.classList.toggle('disabled', !enabled);
 }
 
+function anySetSelected() {
+  return selected.hsk1 || selected.hsk2 || selected.dict || selected.forgotten;
+}
+
 function renderEmptyState() {
   el.flashcard.classList.remove('revealed');
   el.flashcard.innerHTML =
     '<div class="empty-state">' +
-      (selected.hsk1 || selected.hsk2 || selected.dict || selected.forgotten
-        ? "🎉 !No hay más palabras en esta ronda!"
-        : "Elige al menos un nivel de HSK para empezar") +
-      (selected.hsk1 || selected.hsk2 || selected.dict || selected.forgotten ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
+      (anySetSelected()
+        ? "🎉 ¡No hay más palabras en esta ronda!"
+        : "Elige al menos una lista para empezar") +
+      (anySetSelected() ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
     '</div>';
   setActionButtonsEnabled(false);
   updateProgress();
@@ -608,15 +669,17 @@ el.flashcard.addEventListener('click', () => {
 
 el.forgotBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (!revealed) return;
-  // TODO: define "didn't remember" behavior later
+  if (!revealed || !current) return;
+  addToForgotten(current);
   nextCard();
 });
 
 el.rememberBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (!revealed) return;
-  // TODO: define "remember" behavior later
+  if (!revealed || !current) return;
+  if (isInForgotten(current.hanzi)) {
+    removeFromForgotten(current.hanzi);
+  }
   nextCard();
 });
 
