@@ -167,6 +167,7 @@
     <button id="btn-hsk1" class="toggle-btn active">HSK1</button>
     <button id="btn-hsk2" class="toggle-btn active">HSK2</button>
     <button id="btn-dict" class="toggle-btn active">Diccionario personal</button>
+    <button id="btn-forgotten" class="toggle-btn active">Difíciles de recordar</button>
   </div>
   <div class="progress" id="progress"></div>
 
@@ -489,10 +490,14 @@ const DavidDictionary = [
   {hanzi:"吧", pinyin:"ba", en:"suggestion particle"},
 ];
 
+const Forgotten = [
+  {hanzi:"左边", pinyin:"zuǒbian", en:"left side"},
+];
+
 // =========================================================================
 // STATE
 // =========================================================================
-let selected = { hsk1: true, hsk2: true, dict: true };
+let selected = { hsk1: true, hsk2: true, dict: true, forgotten: true };
 let queue = [];
 let current = null;
 let revealed = false;
@@ -501,6 +506,7 @@ const el = {
   btnHsk1: document.getElementById('btn-hsk1'),
   btnHsk2: document.getElementById('btn-hsk2'),
   btnDict: document.getElementById('btn-dict'),
+  btnForgotten: document.getElementById('btn-forgotten'),
   progress: document.getElementById('progress'),
   flashcard: document.getElementById('flashcard'),
   forgotBtn: document.getElementById('forgot-btn'),
@@ -512,6 +518,7 @@ function buildQueue() {
   if (selected.hsk1) words = words.concat(HSK1.map(w => ({...w, set: 'HSK1'})));
   if (selected.hsk2) words = words.concat(HSK2.map(w => ({...w, set: 'HSK2'})));
   if (selected.dict) words = words.concat(DavidDictionary.map(w => ({...w, set: 'DavidDictionary'})));
+  if (selected.forgotten) words = words.concat(Forgotten.map(w => ({...w, set: 'Forgotten'})));
   // Fisher-Yates shuffle
   for (let i = words.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -524,6 +531,7 @@ function updateToggleUI() {
   el.btnHsk1.classList.toggle('active', selected.hsk1);
   el.btnHsk2.classList.toggle('active', selected.hsk2);
   el.btnDict.classList.toggle('active', selected.dict);
+  el.btnForgotten.classList.toggle('active', selected.forgotten);
 }
 
 function updateProgress() {
@@ -532,7 +540,7 @@ function updateProgress() {
     return;
   }
   const remaining = queue.length + (current ? 1 : 0);
-  el.progress.textContent = remaining + ' word' + (remaining === 1 ? '' : 's') + ' remaining';
+  el.progress.textContent = 'Quedan ' + remaining + ' palabra' + (remaining === 1 ? '' : 's');
 }
 
 function setActionButtonsEnabled(enabled) {
@@ -544,10 +552,10 @@ function renderEmptyState() {
   el.flashcard.classList.remove('revealed');
   el.flashcard.innerHTML =
     '<div class="empty-state">' +
-      (selected.hsk1 || selected.hsk2 || selected.dict
+      (selected.hsk1 || selected.hsk2 || selected.dict || selected.forgotten
         ? "🎉 !No hay más palabras en esta ronda!"
         : "Elige al menos un nivel de HSK para empezar") +
-      (selected.hsk1 || selected.hsk2 || selected.dict ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
+      (selected.hsk1 || selected.hsk2 || selected.dict || selected.forgotten ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
     '</div>';
   setActionButtonsEnabled(false);
   updateProgress();
@@ -626,6 +634,12 @@ el.btnHsk2.addEventListener('click', () => {
 
 el.btnDict.addEventListener('click', () => {
   selected.dict = !selected.dict;
+  updateToggleUI();
+  startRound();
+});
+
+el.btnForgotten.addEventListener('click', () => {
+  selected.forgotten = !selected.forgotten;
   updateToggleUI();
   startRound();
 });
