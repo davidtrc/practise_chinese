@@ -166,6 +166,7 @@
   <div class="set-toggles">
     <button id="btn-hsk1" class="toggle-btn active">HSK1</button>
     <button id="btn-hsk2" class="toggle-btn active">HSK2</button>
+    <button id="btn-dict" class="toggle-btn active">Diccionario personal</button>
   </div>
   <div class="progress" id="progress"></div>
 
@@ -484,10 +485,14 @@ const HSK2 = [
   {hanzi:"最近", pinyin:"zuìjìn", en:"recently"},
 ];
 
+const DavidDictionary = [
+  {hanzi:"吧", pinyin:"ba", en:"suggestion particle"},
+];
+
 // =========================================================================
 // STATE
 // =========================================================================
-let selected = { hsk1: true, hsk2: true };
+let selected = { hsk1: true, hsk2: true, dict: true };
 let queue = [];
 let current = null;
 let revealed = false;
@@ -495,6 +500,7 @@ let revealed = false;
 const el = {
   btnHsk1: document.getElementById('btn-hsk1'),
   btnHsk2: document.getElementById('btn-hsk2'),
+  btnDict: document.getElementById('btn-dict'),
   progress: document.getElementById('progress'),
   flashcard: document.getElementById('flashcard'),
   forgotBtn: document.getElementById('forgot-btn'),
@@ -505,6 +511,7 @@ function buildQueue() {
   let words = [];
   if (selected.hsk1) words = words.concat(HSK1.map(w => ({...w, set: 'HSK1'})));
   if (selected.hsk2) words = words.concat(HSK2.map(w => ({...w, set: 'HSK2'})));
+  if (selected.dict) words = words.concat(DavidDictionary.map(w => ({...w, set: 'DavidDictionary'})));
   // Fisher-Yates shuffle
   for (let i = words.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -516,6 +523,7 @@ function buildQueue() {
 function updateToggleUI() {
   el.btnHsk1.classList.toggle('active', selected.hsk1);
   el.btnHsk2.classList.toggle('active', selected.hsk2);
+  el.btnDict.classList.toggle('active', selected.dict);
 }
 
 function updateProgress() {
@@ -536,10 +544,10 @@ function renderEmptyState() {
   el.flashcard.classList.remove('revealed');
   el.flashcard.innerHTML =
     '<div class="empty-state">' +
-      (selected.hsk1 || selected.hsk2
+      (selected.hsk1 || selected.hsk2 || selected.dict
         ? "🎉 !No hay más palabras en esta ronda!"
         : "Elige al menos un nivel de HSK para empezar") +
-      (selected.hsk1 || selected.hsk2 ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
+      (selected.hsk1 || selected.hsk2 || selected.dict ? '<br><button class="restart-btn" id="restart-btn">Reiniciar ronda</button>' : '') +
     '</div>';
   setActionButtonsEnabled(false);
   updateProgress();
@@ -612,6 +620,12 @@ el.btnHsk1.addEventListener('click', () => {
 
 el.btnHsk2.addEventListener('click', () => {
   selected.hsk2 = !selected.hsk2;
+  updateToggleUI();
+  startRound();
+});
+
+el.btnDict.addEventListener('click', () => {
+  selected.dict = !selected.dict;
   updateToggleUI();
   startRound();
 });
