@@ -33,6 +33,23 @@
     height: 100vh;
     height: 100dvh; /* actual visible height on mobile Safari, overrides above */
     padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom) 16px;
+    position: relative;
+  }
+
+  /* --- Hamburger menu button --- */
+  .menu-btn {
+    position: absolute;
+    top: calc(env(safe-area-inset-top) + 10px);
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent-off);
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1;
+    z-index: 20;
   }
 
   /* --- Top toggle bar --- */
@@ -41,7 +58,7 @@
     flex-wrap: wrap;
     gap: 8px;
     justify-content: center;
-    padding: 10px 0 6px 0;
+    padding: 10px 52px 6px 16px;
     flex-shrink: 0;
   }
   .toggle-btn {
@@ -123,14 +140,6 @@
     color: var(--text);
     margin-top: 4px;
   }
-  .badge {
-    margin-top: 10px;
-    font-size: 12px;
-    color: var(--text-dim);
-    background: rgba(255,255,255,0.06);
-    padding: 3px 10px;
-    border-radius: 20px;
-  }
 
   /* --- Bottom action buttons --- */
   .actions {
@@ -176,10 +185,74 @@
     font-size: 15px;
     font-weight: 600;
   }
+
+  /* --- Menu overlay / modal --- */
+  .menu-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .menu-overlay.hidden {
+    display: none;
+  }
+  .menu-panel {
+    width: 100%;
+    max-width: 360px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 24px 20px;
+    text-align: center;
+  }
+  .menu-panel h3 {
+    margin: 0 0 6px 0;
+    font-size: 18px;
+  }
+  .menu-hint {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 0 0 18px 0;
+    line-height: 1.4;
+  }
+  .menu-count {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: -10px 0 18px 0;
+  }
+  .menu-action-btn {
+    width: 100%;
+    padding: 14px 0;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent-off);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .menu-action-btn:active {
+    opacity: 0.8;
+  }
+  .menu-close-btn {
+    width: 100%;
+    padding: 12px 0;
+    border-radius: 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
 <div id="app">
+
+  <button id="menu-btn" class="menu-btn" aria-label="Menú">☰</button>
 
   <div class="set-toggles">
     <button id="btn-hsk1" class="toggle-btn active">HSK1</button>
@@ -198,6 +271,18 @@
   <div class="actions">
     <button id="forgot-btn" class="action-btn forgot-btn disabled">No me acordaba</button>
     <button id="remember-btn" class="action-btn remember-btn disabled">Lo recordaba</button>
+  </div>
+
+  <div id="menu-overlay" class="menu-overlay hidden">
+    <div class="menu-panel">
+      <h3>Diccionario personal</h3>
+      <p class="menu-hint">Archivo CSV con columnas: hanzi, pinyin, es</p>
+      <p class="menu-count" id="menu-count"></p>
+      <button id="menu-download-btn" class="menu-action-btn">📤 Descargar CSV actual</button>
+      <button id="menu-load-btn" class="menu-action-btn">📥 Cargar CSV (reemplaza el actual)</button>
+      <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display:none">
+      <button id="menu-close-btn" class="menu-close-btn">Cerrar</button>
+    </div>
   </div>
 
 </div>
@@ -514,7 +599,7 @@ const HSK1 = [
   {hanzi:"做饭", pinyin:"zuòfàn", es:"cocinar"},
   {hanzi:"昨天", pinyin:"zuótiān", es:"ayer"},
 ];
- 
+
 const HSK2 = [
   {hanzi:"啊", pinyin:"a", es:"partícula de énfasis"},
   {hanzi:"爱好", pinyin:"àihào", es:"afición / hobby"},
@@ -716,15 +801,34 @@ const HSK2 = [
   {hanzi:"足球", pinyin:"zúqiú", es:"fútbol"},
 ];
 
-// Your own personal word list. Add words you're learning outside HSK1/HSK2 here.
-const DavidDictionary = [
-  {hanzi:"吧", pinyin:"ba", es:"suggestion particle"},
-];
+// =========================================================================
+// PERSISTENT "CUSTOM DICTIONARY" (formerly the static DavidDictionary)
+// Stored in localStorage, editable via CSV import/export in the hamburger
+// menu. Format: hanzi,pinyin,es
+// =========================================================================
+const CUSTOM_DICT_KEY = 'chineseFlashcards.customDictionary';
+
+function loadCustomDictionary() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_DICT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('Could not read custom dictionary', e);
+    return [];
+  }
+}
+
+function saveCustomDictionary(list) {
+  try {
+    localStorage.setItem(CUSTOM_DICT_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Could not save custom dictionary', e);
+  }
+}
 
 // =========================================================================
 // PERSISTENT "FORGOTTEN WORDS" LIST
-// Stored in localStorage, per browser. Survives refresh. No static array
-// anymore — this is read/written dynamically as you tap the two buttons.
+// Stored in localStorage, per browser. Survives refresh.
 // =========================================================================
 const FORGOTTEN_KEY = 'chineseFlashcards.forgottenWords';
 
@@ -753,7 +857,7 @@ function isInForgotten(hanzi) {
 function addToForgotten(word) {
   const list = loadForgotten();
   if (!list.some(w => w.hanzi === word.hanzi)) {
-    list.push({ hanzi: word.hanzi, pinyin: word.pinyin, en: word.en });
+    list.push({ hanzi: word.hanzi, pinyin: word.pinyin, es: word.es });
     saveForgotten(list);
   }
 }
@@ -761,6 +865,87 @@ function addToForgotten(word) {
 function removeFromForgotten(hanzi) {
   const list = loadForgotten().filter(w => w.hanzi !== hanzi);
   saveForgotten(list);
+}
+
+// =========================================================================
+// CSV HELPERS (used by the hamburger menu to import/export CustomDictionary)
+// Minimal RFC4180-ish parser/writer: handles quoted fields, commas and
+// quotes inside fields, and CRLF or LF line endings.
+// =========================================================================
+function csvEscape(value) {
+  const str = String(value ?? '');
+  if (/[",\n]/.test(str)) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+function dictionaryToCSV(list) {
+  const lines = ['hanzi,pinyin,es'];
+  for (const w of list) {
+    lines.push([csvEscape(w.hanzi), csvEscape(w.pinyin), csvEscape(w.es)].join(','));
+  }
+  return lines.join('\n');
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let field = '', row = [], inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else {
+      if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        rows.push(row); row = [];
+      } else {
+        field += c;
+      }
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length === 1 && r[0].trim() === ''));
+}
+
+function csvToDictionary(text) {
+  const rows = parseCSV(text.trim());
+  if (rows.length === 0) return [];
+  let startIdx = 0;
+  const first = rows[0].map(c => c.trim().toLowerCase());
+  if (first[0] === 'hanzi' && first[1] === 'pinyin' && first[2] === 'es') {
+    startIdx = 1;
+  }
+  const list = [];
+  for (let i = startIdx; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || !r[0].trim()) continue;
+    list.push({ hanzi: (r[0] || '').trim(), pinyin: (r[1] || '').trim(), es: (r[2] || '').trim() });
+  }
+  return list;
+}
+
+function downloadCustomDictionary() {
+  const csv = dictionaryToCSV(loadCustomDictionary());
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'diccionario-personal.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // =========================================================================
@@ -772,6 +957,13 @@ let current = null;
 let revealed = false;
 
 const el = {
+  menuBtn: document.getElementById('menu-btn'),
+  menuOverlay: document.getElementById('menu-overlay'),
+  menuCount: document.getElementById('menu-count'),
+  menuDownloadBtn: document.getElementById('menu-download-btn'),
+  menuLoadBtn: document.getElementById('menu-load-btn'),
+  menuCloseBtn: document.getElementById('menu-close-btn'),
+  csvFileInput: document.getElementById('csv-file-input'),
   btnHsk1: document.getElementById('btn-hsk1'),
   btnHsk2: document.getElementById('btn-hsk2'),
   btnDict: document.getElementById('btn-dict'),
@@ -786,7 +978,7 @@ function buildQueue() {
   let words = [];
   if (selected.hsk1) words = words.concat(HSK1.map(w => ({...w, set: 'HSK1'})));
   if (selected.hsk2) words = words.concat(HSK2.map(w => ({...w, set: 'HSK2'})));
-  if (selected.dict) words = words.concat(DavidDictionary.map(w => ({...w, set: 'DavidDictionary'})));
+  if (selected.dict) words = words.concat(loadCustomDictionary().map(w => ({...w, set: 'CustomDictionary'})));
   if (selected.forgotten) words = words.concat(loadForgotten().map(w => ({...w, set: 'Forgotten'})));
   // Fisher-Yates shuffle
   for (let i = words.length - 1; i > 0; i--) {
@@ -871,7 +1063,7 @@ function startRound() {
   nextCard();
 }
 
-// --- Event listeners ---
+// --- Event listeners: card + answer buttons ---
 el.flashcard.addEventListener('click', () => {
   if (!current) return;
   if (!revealed) {
@@ -895,6 +1087,7 @@ el.rememberBtn.addEventListener('click', (e) => {
   nextCard();
 });
 
+// --- Event listeners: set toggles ---
 el.btnHsk1.addEventListener('click', () => {
   selected.hsk1 = !selected.hsk1;
   updateToggleUI();
@@ -917,6 +1110,57 @@ el.btnForgotten.addEventListener('click', () => {
   selected.forgotten = !selected.forgotten;
   updateToggleUI();
   startRound();
+});
+
+// --- Event listeners: hamburger menu ---
+function openMenu() {
+  const count = loadCustomDictionary().length;
+  el.menuCount.textContent = count + ' palabra' + (count === 1 ? '' : 's') + ' en el diccionario personal';
+  el.menuOverlay.classList.remove('hidden');
+}
+
+function closeMenu() {
+  el.menuOverlay.classList.add('hidden');
+}
+
+el.menuBtn.addEventListener('click', openMenu);
+el.menuCloseBtn.addEventListener('click', closeMenu);
+el.menuOverlay.addEventListener('click', (e) => {
+  if (e.target === el.menuOverlay) closeMenu();
+});
+
+el.menuDownloadBtn.addEventListener('click', () => {
+  downloadCustomDictionary();
+});
+
+el.menuLoadBtn.addEventListener('click', () => {
+  el.csvFileInput.click();
+});
+
+el.csvFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = ''; // reset so the same file can be picked again later
+  if (!file) return;
+
+  const proceed = confirm('Esto va a reemplazar tu diccionario personal actual por el contenido del CSV. ¿Continuar?');
+  if (!proceed) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const list = csvToDictionary(reader.result);
+      saveCustomDictionary(list);
+      closeMenu();
+      startRound();
+    } catch (err) {
+      alert('No se pudo leer el CSV. Revisa el formato (hanzi,pinyin,es).');
+      console.error(err);
+    }
+  };
+  reader.onerror = () => {
+    alert('No se pudo leer el archivo.');
+  };
+  reader.readAsText(file, 'UTF-8');
 });
 
 // --- Init ---
