@@ -355,7 +355,7 @@
   <div id="menu-overlay" class="menu-overlay hidden">
     <div class="menu-panel">
       <h3>Diccionario personal</h3>
-      <p class="menu-hint">Archivo CSV con columnas: hanzi, pinyin, es</p>
+      <p class="menu-hint">Archivo CSV con columnas: es, pinyin, hanzi</p>
       <p class="menu-count" id="menu-count"></p>
       <button id="menu-download-btn" class="menu-action-btn">📤 Descargar CSV actual</button>
       <button id="menu-load-btn" class="menu-action-btn">📥 Cargar CSV (reemplaza el actual)</button>
@@ -971,12 +971,14 @@ function csvEscape(value) {
 }
 
 function dictionaryToCSV(list) {
-  const lines = ['hanzi,pinyin,es'];
+  const lines = ['es,pinyin,hanzi'];
   for (const w of list) {
-    lines.push([csvEscape(w.hanzi), csvEscape(w.pinyin), csvEscape(w.es)].join(','));
+    lines.push([csvEscape(w.es), csvEscape(w.pinyin), csvEscape(w.hanzi)].join(','));
   }
   return lines.join('\n');
 }
+
+
 
 function parseCSV(text) {
   const rows = [];
@@ -1009,18 +1011,27 @@ function parseCSV(text) {
 }
 
 function csvToDictionary(text) {
-  const rows = parseCSV(text.trim());
+  const rows = parseCSV(text.replace(/^\uFEFF/, '').trim());
   if (rows.length === 0) return [];
+
+  let idx = { es: 0, pinyin: 1, hanzi: 2 };   // default: headerless, new order
   let startIdx = 0;
   const first = rows[0].map(c => c.trim().toLowerCase());
-  if (first[0] === 'hanzi' && first[1] === 'pinyin' && first[2] === 'es') {
+  if (first.includes('hanzi') && first.includes('pinyin') && first.includes('es')) {
+    idx = { es: first.indexOf('es'), pinyin: first.indexOf('pinyin'), hanzi: first.indexOf('hanzi') };
     startIdx = 1;
   }
+
   const list = [];
   for (let i = startIdx; i < rows.length; i++) {
     const r = rows[i];
-    if (!r[0] || !r[0].trim()) continue;
-    list.push({ hanzi: (r[0] || '').trim(), pinyin: (r[1] || '').trim(), es: (r[2] || '').trim() });
+    const hanzi = (r[idx.hanzi] || '').trim();
+    if (!hanzi) continue;
+    list.push({
+      hanzi,
+      pinyin: (r[idx.pinyin] || '').trim(),
+      es: (r[idx.es] || '').trim()
+    });
   }
   return list;
 }
@@ -1319,7 +1330,7 @@ el.csvFileInput.addEventListener('change', (e) => {
       closeMenu();
       startRound();
     } catch (err) {
-      alert('No se pudo leer el CSV. Revisa el formato (hanzi,pinyin,es).');
+      alert('No se pudo leer el CSV. Revisa el formato (es,pinyin,hanzi).');
       console.error(err);
     }
   };
@@ -1355,6 +1366,11 @@ el.csvFileInput.addEventListener('change', (e) => {
     startRound();
   }
 })();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(console.error);
+}
+
 </script>
 </body>
 </html>
